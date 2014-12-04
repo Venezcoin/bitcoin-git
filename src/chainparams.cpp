@@ -273,6 +273,7 @@ public:
         fRequireStandard = false;
         fMineBlocksOnDemand = true;
         fTestnetToBeDeprecatedFieldRPC = false;
+        fSkipProofOfWorkCheck = true; //MEGABLOCKS (creates chains with all blocks == min POW)
     }
     const Checkpoints::CCheckpointData& Checkpoints() const 
     {

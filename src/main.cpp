@@ -54,6 +54,10 @@ bool fTxIndex = false;
 bool fIsBareMultisigStd = true;
 unsigned int nCoinCacheSize = 5000;
 
+//MEGABLOCKS: coinbase transactions from a chain we're emulating
+std::multimap<int, CTransaction> megablockCoinbases;
+typedef std::multimap<int, CTransaction>::const_iterator megaIter;
+
 
 /** Fees smaller than this (in satoshi) are considered zero fee (for relaying and mining) */
 CFeeRate minRelayTxFee = CFeeRate(1000);
@@ -706,9 +710,12 @@ bool IsFinalTx(const CTransaction &tx, int nBlockHeight, int64_t nBlockTime)
         nBlockTime = GetAdjustedTime();
     if ((int64_t)tx.nLockTime < ((int64_t)tx.nLockTime < LOCKTIME_THRESHOLD ? (int64_t)nBlockHeight : nBlockTime))
         return true;
+    //MEGABLOCKS: perform all the checks, but treat all transactions as final
+    // because block heights and timestamps are different from the 'real' chain.
+    bool fResult = true;
     BOOST_FOREACH(const CTxIn& txin, tx.vin)
         if (!txin.IsFinal())
-            return false;
+            fResult = false;
     return true;
 }
 
@@ -1636,6 +1643,7 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
 
         // restore inputs
         if (i > 0) { // not coinbases
+            if (tx.IsCoinBase()) continue; // MEGABLOCKS
             const CTxUndo &txundo = blockUndo.vtxundo[i-1];
             if (txundo.vprevout.size() != tx.vin.size())
                 return error("DisconnectBlock() : transaction and undo data inconsistent");
@@ -1662,6 +1670,14 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
                 coins->vout[out.n] = undo.txout;
             }
         }
+    }
+
+    //MEGABLOCKS: remove other-chain coinbase transactions
+    std::pair<megaIter, megaIter> range = megablockCoinbases.equal_range(pindex->nHeight);
+    for (megaIter it = range.first; it != range.second; it++) {
+        const CTransaction& coinbase_tx = it->second;
+        uint256 txid = coinbase_tx.GetHash();
+        view.ModifyCoins(txid)->Clear();
     }
 
     // move best block pointer to prevout block
@@ -1764,6 +1780,14 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
     unsigned int flags = fStrictPayToScriptHash ? SCRIPT_VERIFY_P2SH : SCRIPT_VERIFY_NONE;
 
+    //MEGABLOCKS: add other-chain coinbase transactions
+    std::pair<megaIter, megaIter>range = megablockCoinbases.equal_range(pindex->nHeight);
+    for (megaIter it = range.first; it != range.second; it++) {
+        const CTransaction& coinbase_tx = it->second;
+        uint256 txid = coinbase_tx.GetHash();
+        view.ModifyCoins(txid)->FromTx(coinbase_tx, pindex->nHeight);
+    }
+
     CBlockUndo blockundo;
 
     CCheckQueueControl<CScriptCheck> control(fScriptChecks && nScriptCheckThreads ? &scriptcheckqueue : NULL);
@@ -1820,6 +1844,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         vPos.push_back(std::make_pair(tx.GetHash(), pos));
         pos.nTxOffset += ::GetSerializeSize(tx, SER_DISK, CLIENT_VERSION);
     }
+
     int64_t nTime1 = GetTimeMicros(); nTimeConnect += nTime1 - nTimeStart;
     LogPrint("bench", "      - Connect %u transactions: %.2fms (%.3fms/tx, %.3fms/txin) [%.2fs]\n", (unsigned)block.vtx.size(), 0.001 * (nTime1 - nTimeStart), 0.001 * (nTime1 - nTimeStart) / block.vtx.size(), nInputs <= 1 ? 0 : 0.001 * (nTime1 - nTimeStart) / (nInputs-1), nTimeConnect * 0.000001);
 
