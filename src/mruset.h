@@ -5,6 +5,7 @@
 #ifndef BITCOIN_MRUSET_H
 #define BITCOIN_MRUSET_H
 
+#include <algorithm>
 #include <deque>
 #include <set>
 #include <utility>
@@ -50,6 +51,15 @@ public:
                 queue.pop_front();
             }
             queue.push_back(x);
+        }
+        return ret;
+    }
+    size_type erase(const key_type& x)
+    {
+        size_type ret = set.erase(x);
+        if (ret) {
+            typename std::deque<T>::iterator i = std::find(queue.begin(), queue.end(), x);
+            if (i != queue.end()) queue.erase(i);
         }
         return ret;
     }

@@ -96,4 +96,42 @@ BOOST_AUTO_TEST_CASE(mruset_window)
     }
 }
 
+// Test erase functionality
+BOOST_AUTO_TEST_CASE(mruset_erase)
+{
+    mruset<int> mru(MAX_SIZE);
+    for (int n=0; n<MAX_SIZE; n++)
+    {
+        mru.insert(n);
+    }
+    // Remove elevenses:
+    int nRemoved = 0;
+    for (int n=11; n<MAX_SIZE; n+=11)
+    {
+        mru.erase(n);
+        ++nRemoved;
+    }
+    BOOST_CHECK(mru.size() == MAX_SIZE-nRemoved);
+    BOOST_CHECK(mru.find(0) != mru.end());
+    BOOST_CHECK(mru.find(10) != mru.end());
+    BOOST_CHECK(mru.find(11) == mru.end());
+    BOOST_CHECK(mru.find(12) != mru.end());
+    BOOST_CHECK(mru.find(98) != mru.end());
+    BOOST_CHECK(mru.find(99) == mru.end());
+
+    // Overflow by ten, should evict 0-9:
+    for (int n = 0; n < nRemoved+10; n++)
+    {
+        mru.insert(MAX_SIZE+n);
+    }
+    BOOST_CHECK(mru.size() == MAX_SIZE);
+    BOOST_CHECK(mru.find(0) == mru.end());
+    BOOST_CHECK(mru.find(10) != mru.end());
+    BOOST_CHECK(mru.find(11) == mru.end());
+    BOOST_CHECK(mru.find(12) != mru.end());
+    BOOST_CHECK(mru.find(98) != mru.end());
+    BOOST_CHECK(mru.find(99) == mru.end());
+    BOOST_CHECK(mru.find(100) != mru.end());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
