@@ -128,7 +128,9 @@ class BitcoinTestFramework(object):
             print("Unexpected exception caught during testing: "+str(e))
             traceback.print_tb(sys.exc_info()[2])
 
-        if not self.options.nocleanup:
+        if self.options.nocleanup:
+            print("Test directory was "+self.options.tmpdir)
+        else:
             print("Cleaning up")
             stop_nodes(self.nodes)
             wait_bitcoinds()
